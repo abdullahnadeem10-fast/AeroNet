@@ -117,9 +117,11 @@ def plan_delivery_segments(
     hub: tuple[int, int],
     pickup: tuple[int, int],
     dropoff: tuple[int, int],
+    max_range: Optional[int] = None,
 ) -> tuple[list[tuple[str, AStarResult]], Optional[str]]:
     """
     hub -> pickup -> dropoff -> hub. Returns list of (segment name, result) and optional error.
+    max_range: if set, total steps across all three legs must not exceed this value.
     """
     legs = [
         ("hub -> pickup", hub, pickup),
@@ -132,6 +134,13 @@ def plan_delivery_segments(
         if res.error:
             return out, f"{name}: {res.error}"
         out.append((name, res))
+    if max_range is not None:
+        total_steps = sum(len(r.path) - 1 for _, r in out if r.path)
+        if total_steps > max_range:
+            return out, (
+                f"Total route length {total_steps} cells "
+                f"exceeds drone range {max_range} cells."
+            )
     return out, None
 
 
@@ -237,6 +246,46 @@ def pick_delivery_waypoints(grid: Grid) -> Optional[tuple[tuple[int, int], tuple
     if pickup and dropoff:
         return hub, pickup, dropoff
     return None
+
+
+def pick_multiple_delivery_waypoints(
+    grid: Grid, n: int = 8
+) -> list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]]:
+    """Return up to n (hub, pickup, dropoff) delivery jobs with varied drop-off locations."""
+    hubs = [(c.row, c.col) for row in grid.grid for c in row if c.is_hub]
+    pickup_set: set[tuple[int, int]] = set()
+    for row in grid.grid:
+        for c in row:
+            if c.is_medical_pickup or c.zone == Zone.COMMERCIAL:
+                pickup_set.add((c.row, c.col))
+    pickups = list(pickup_set)
+    dropoffs = [
+        (c.row, c.col) for row in grid.grid for c in row if c.zone == Zone.RESIDENTIAL
+    ]
+
+    if not hubs or not pickups or not dropoffs:
+        single = pick_delivery_waypoints(grid)
+        return [single] if single else []
+
+    results: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
+    seen_dropoffs: set[tuple[int, int]] = set()
+
+    for i, dropoff in enumerate(dropoffs):
+        if len(results) >= n:
+            break
+        if dropoff in seen_dropoffs:
+            continue
+        hub = hubs[i % len(hubs)]
+        if hub == dropoff:
+            continue
+        for j in range(len(pickups)):
+            pickup = pickups[(i + j) % len(pickups)]
+            if pickup != hub and pickup != dropoff:
+                results.append((hub, pickup, dropoff))
+                seen_dropoffs.add(dropoff)
+                break
+
+    return results
 
 
 def clear_no_fly_at(grid: Grid, points: list[tuple[int, int]]) -> None:

@@ -147,13 +147,33 @@ def repair_layout(grid: Grid, max_iterations: int = 200) -> bool:
 
 def print_validation_report(grid: Grid) -> None:
     errors = validate_layout(grid)
+
+    by_rule = {
+        "R1": [e for e in errors if e.startswith("R1")],
+        "R2": [e for e in errors if e.startswith("R2")],
+        "R3": [e for e in errors if e.startswith("R3")],
+        "R4": [e for e in errors if e.startswith("R4")],
+    }
+    rule_meta = [
+        ("R1", "Industrial not adjacent to School/Hospital"),
+        ("R2", "Residential within 3 cells of a hub"),
+        ("R3", "Hub within 2 cells of a charging pad"),
+        ("R4", "Hospital has medical pickup within 1 cell"),
+    ]
+
     print("\n==============================")
     print(" AERONET LAYOUT VALIDATION ")
     print("==============================\n")
+    for rule_id, desc in rule_meta:
+        rule_errs = by_rule[rule_id]
+        if rule_errs:
+            print(f"  {rule_id} FAILED - {desc}")
+            for e in rule_errs:
+                print(f"    {e}")
+        else:
+            print(f"  {rule_id} PASSED - {desc}")
+    print()
     if not errors:
-        print("Layout validity = TRUE")
-        print("All CSP constraints satisfied.")
+        print("Layout validity = TRUE - all CSP constraints satisfied.")
     else:
-        print("Layout validity = FALSE\n")
-        for error in errors:
-            print(error)
+        print(f"Layout validity = FALSE  ({len(errors)} violation(s) total)")
