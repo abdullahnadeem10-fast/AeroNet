@@ -1,100 +1,116 @@
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any
+import random
+from enum import Enum
 
 
-@dataclass
+class Zone(Enum):
+    RESIDENTIAL = "Residential"
+    COMMERCIAL = "Commercial"
+    HOSPITAL = "Hospital"
+    SCHOOL = "School"
+    INDUSTRIAL = "Industrial"
+    OPEN_FIELD = "Open Field"
+
+
 class Cell:
-    row: int
-    col: int
-    zone: str = "residential"
-    density: int = 1
-    is_hub: bool = False
-    is_charging: bool = False
-    is_medical_pickup: bool = False
-    no_fly: bool = False
-    demand: int = 0
+    def __init__(
+        self,
+        row,
+        col,
+        zone,
+        density=0,
+        is_hub=False,
+        is_charging=False,
+        is_medical_pickup=False,
+        demand=0,
+        no_fly=False,
+    ):
+        self.row = row
+        self.col = col
+        self.zone = zone
+        self.density = density
+        self.is_hub = is_hub
+        self.is_charging = is_charging
+        self.is_medical_pickup = is_medical_pickup
+        self.demand = demand
+        self.no_fly = no_fly
 
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    def __str__(self):
+        return f"({self.row}, {self.col}) {self.zone.value}"
 
 
-def create_sample_grid(rows: int = 10, cols: int = 10) -> List[List[Cell]]:
-    grid: List[List[Cell]] = []
-    for r in range(rows):
-        row: List[Cell] = []
-        for c in range(cols):
-            # default
-            zone = "residential"
-            density = 1
-            is_hub = False
-            is_charging = False
-            is_medical_pickup = False
-            no_fly = False
-            demand = 0
+class Grid:
+    def __init__(self, rows, cols, zone_limits=None):
+        self.rows = rows
+        self.cols = cols
+        self.grid = []
+        self.zone_limits = zone_limits
 
-            # industrial district (top-right corner)
-            if r in (0, 1, 2) and c in (7, 8, 9):
-                zone = "industrial"
-                density = 0
+    def populate_grid(self):
+        self.grid = []
+        total = self.rows * self.cols
 
-            # commercial corridor rows 4-5 (slightly higher demand)
-            if r in (4, 5):
-                zone = "commercial"
-                density = 2
-                demand = 2
-
-            # hospital + medical pickup
-            if (r, c) == (2, 2):
-                zone = "hospital"
-                is_medical_pickup = True
-                density = 2
-                demand = 3
-
-            # hubs
-            if (r, c) in ((0, 0), (9, 9)):
-                is_hub = True
-                zone = "hub"
-                density = 2
-
-            # charging pads near hubs
-            if (r, c) in ((0, 1), (9, 8)):
-                is_charging = True
-                zone = "charging"
-
-            # a deliberate no-fly cell for Phase 1 visualization
-            if (r, c) == (5, 5):
-                no_fly = True
-                zone = "no_fly"
-
-            cell = Cell(
-                row=r,
-                col=c,
+        def make_cell(row, col, zone):
+            return Cell(
+                row=row,
+                col=col,
                 zone=zone,
-                density=density,
-                is_hub=is_hub,
-                is_charging=is_charging,
-                is_medical_pickup=is_medical_pickup,
-                no_fly=no_fly,
-                demand=demand,
+                density=random.randint(0, 100),
+                is_hub=random.choice([True, False]),
+                is_charging=random.choice([True, False]),
+                is_medical_pickup=random.choice([True, False]),
+                demand=random.randint(0, 50),
+                no_fly=False,
             )
-            row.append(cell)
-        grid.append(row)
-    return grid
 
+        if self.zone_limits is None:
+            for row in range(self.rows):
+                current_row = []
+                for col in range(self.cols):
+                    zone = random.choice(list(Zone))
+                    current_row.append(make_cell(row, col, zone))
+                self.grid.append(current_row)
+            return
 
-def grid_to_serializable(grid: List[List[Cell]]) -> Dict[str, object]:
-    rows = len(grid)
-    cols = len(grid[0]) if rows else 0
-    cells = []
-    for row in grid:
-        for cell in row:
-            cells.append(cell.to_dict())
-    return {"rows": rows, "cols": cols, "cells": cells}
+        caps = {}
+        for z, n in self.zone_limits.items():
+            if z == Zone.OPEN_FIELD:
+                continue
+            if n < 0:
+                raise ValueError(
+                    f"Zone limit for {z} must be non-negative, got {n}"
+                )
+            caps[z] = int(n)
 
+        pool = []
+        for z, cap in caps.items():
+            pool.extend([z] * cap)
 
-# module-level sample grid
-SAMPLE_GRID = create_sample_grid()
+        if len(pool) > total:
+            raise ValueError(
+                f"Sum of zone limits ({len(pool)}) exceeds grid size ({total}). "
+                "Lower the limits or enlarge the grid."
+            )
 
+        pool.extend([Zone.OPEN_FIELD] * (total - len(pool)))
+        random.shuffle(pool)
 
-def get_sample_grid_serializable() -> Dict[str, object]:
-    return grid_to_serializable(SAMPLE_GRID)
+        i = 0
+        for row in range(self.rows):
+            current_row = []
+            for col in range(self.cols):
+                current_row.append(make_cell(row, col, pool[i]))
+                i += 1
+            self.grid.append(current_row)
+
+    def get_neighbors(self, row, col):
+        neighbors = []
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        for dr, dc in directions:
+            nr = row + dr
+            nc = col + dc
+            if 0 <= nr < self.rows and 0 <= nc < self.cols:
+                neighbors.append(self.grid[nr][nc])
+        return neighbors
+
+    def manhattan(self, a, b):
+        return abs(a.row - b.row) + abs(a.col - b.col)
