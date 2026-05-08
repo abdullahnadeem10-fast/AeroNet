@@ -23,6 +23,7 @@ from src.astar_planner import (
 from src.visualization import plot_delivery_routes, plot_demand_heatmap, plot_zone_layout
 from src.disruption_handler import run_disruption_demo
 from src.ml_pipeline import run_ml_pipeline
+from src.delivery_simulator import run_simulation
 
 
 def sprinkle_no_fly(
@@ -198,6 +199,8 @@ def run_full_demo(seed: int = 42) -> Grid:
     run_disruption_demo(grid, assignments, drone_slots)
 
     run_ml_pipeline(grid=grid, show=True)
+
+    run_simulation(seed=seed, save_log=True)
 
     return grid
 

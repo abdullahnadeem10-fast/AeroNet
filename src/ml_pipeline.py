@@ -55,7 +55,7 @@ def generate_demand_dataset(n_samples: int = 800, seed: int = 42) -> pd.DataFram
               zone_type (0-5), density (0-100), is_hub (0/1).
     Target: demand (0-100 integer).
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(int(seed))
 
     hour    = rng.integers(0, 24, n_samples)
     day     = rng.integers(0, 7, n_samples)
@@ -223,7 +223,7 @@ def generate_telemetry_dataset(
       Route Anomaly   - route_deviation high
       Sensor Spike    - altitude_change or speed_change spikes
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(int(seed))
     rows: list[dict] = []
     per_class = n_anomalies // 3
 
@@ -264,7 +264,7 @@ def generate_telemetry_dataset(
 
     df = pd.DataFrame(rows)
     df["label"] = df["label"].astype(int)
-    return df.sample(frac=1, random_state=seed).reset_index(drop=True)
+    return df.sample(frac=1, random_state=int(seed)).reset_index(drop=True)
 
 
 def train_anomaly_models(df: pd.DataFrame) -> dict:
