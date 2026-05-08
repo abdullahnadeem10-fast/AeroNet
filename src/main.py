@@ -8,13 +8,20 @@ if str(_ROOT) not in sys.path:
 
 from src.grid_model import Grid, Zone
 from src.layout_validator import print_validation_report, repair_layout
-from src.fleet_selector import format_fleet_summary, select_fleet_ga
+from src.fleet_selector import (
+    HEAVY_RANGE_CELLS,
+    LIGHT_RANGE_CELLS,
+    FleetResult,
+    format_fleet_summary,
+    select_fleet_ga,
+)
 from src.astar_planner import (
     clear_no_fly_at,
-    pick_delivery_waypoints,
+    pick_multiple_delivery_waypoints,
     plan_delivery_segments,
 )
-from src.visualization import plot_delivery_routes, plot_zone_layout
+from src.visualization import plot_delivery_routes, plot_demand_heatmap, plot_zone_layout
+from src.disruption_handler import run_disruption_demo
 
 
 def sprinkle_no_fly(
@@ -37,6 +44,82 @@ def sprinkle_no_fly(
             continue
         grid.grid[r][c].no_fly = True
         placed += 1
+
+
+def _build_drone_slots(fleet: FleetResult) -> list[dict]:
+    slots = []
+    for i in range(fleet.light_count):
+        slots.append({"id": f"D{i + 1}", "type": "Light", "range": LIGHT_RANGE_CELLS})
+    for j in range(fleet.heavy_count):
+        slots.append({"id": f"D{fleet.light_count + j + 1}", "type": "Heavy", "range": HEAVY_RANGE_CELLS})
+    return slots
+
+
+def _assign_deliveries(
+    grid,
+    deliveries: list,
+    drone_slots: list[dict],
+) -> list[dict]:
+    results = []
+    n = len(drone_slots)
+    for i, (hub, pickup, dropoff) in enumerate(deliveries):
+        assigned = False
+        for offset in range(n):
+            drone = drone_slots[(i + offset) % n]
+            segs, err = plan_delivery_segments(
+                grid, hub, pickup, dropoff, max_range=drone["range"]
+            )
+            if not err:
+                steps = sum(len(r.path) - 1 for _, r in segs if r.path)
+                cost = sum(r.total_cost for _, r in segs)
+                results.append({
+                    "job": f"J{i + 1}",
+                    "drone": drone["id"],
+                    "type": drone["type"],
+                    "hub": hub,
+                    "pickup": pickup,
+                    "dropoff": dropoff,
+                    "steps": steps,
+                    "cost": cost,
+                    "status": "OK",
+                    "segments": segs,
+                })
+                assigned = True
+                break
+        if not assigned:
+            results.append({
+                "job": f"J{i + 1}",
+                "drone": "--",
+                "type": "--",
+                "hub": hub,
+                "pickup": pickup,
+                "dropoff": dropoff,
+                "steps": 0,
+                "cost": 0.0,
+                "status": "FAILED",
+                "segments": [],
+            })
+    return results
+
+
+def _print_delivery_table(assignments: list[dict]) -> None:
+    sep = "=" * 70
+    print(f"\n{sep}")
+    print(" DELIVERY ASSIGNMENT TABLE")
+    print(sep)
+    print(f"{'Job':<5} {'Drone':<6} {'Type':<7} {'Hub':<8} {'Pickup':<8} {'Drop-off':<9} {'Steps':>5} {'Cost':>6}  Status")
+    print("-" * 70)
+    for a in assignments:
+        steps_s = str(a["steps"]) if a["status"] == "OK" else "--"
+        cost_s = f"{a['cost']:.1f}" if a["status"] == "OK" else "--"
+        print(
+            f"{a['job']:<5} {a['drone']:<6} {a['type']:<7} "
+            f"{str(a['hub']):<8} {str(a['pickup']):<8} {str(a['dropoff']):<9} "
+            f"{steps_s:>5} {cost_s:>6}  {a['status']}"
+        )
+    ok = sum(1 for a in assignments if a["status"] == "OK")
+    print("-" * 70)
+    print(f"  {ok} assigned   {len(assignments) - ok} failed\n")
 
 
 def _path_pretty(path: list[tuple[int, int]]) -> str:
@@ -67,17 +150,22 @@ def run_full_demo(seed: int = 42) -> Grid:
     print()
     print(format_fleet_summary(fleet))
 
-    wps = pick_delivery_waypoints(grid)
-    if not wps:
-        print("\n[A*] No hub / pickup / drop-off — skipping routing.")
+    deliveries = pick_multiple_delivery_waypoints(grid, n=8)
+    if not deliveries:
+        print("\n[A*] No deliveries could be generated - skipping routing.")
         plot_zone_layout(grid, title="1. Zone layout (after CSP repair)", show=True)
         return grid
 
-    hub, pickup, dropoff = wps
-    reserved = {hub, pickup, dropoff}
+    reserved: set[tuple[int, int]] = set()
+    for hub, pickup, dropoff in deliveries:
+        reserved.update([hub, pickup, dropoff])
     clear_no_fly_at(grid, list(reserved))
     sprinkle_no_fly(grid, n=12, seed=seed, avoid=reserved)
     clear_no_fly_at(grid, list(reserved))
+
+    drone_slots = _build_drone_slots(fleet)
+    assignments = _assign_deliveries(grid, deliveries, drone_slots)
+    _print_delivery_table(assignments)
 
     plot_zone_layout(
         grid,
@@ -85,31 +173,29 @@ def run_full_demo(seed: int = 42) -> Grid:
         show=True,
         mark_no_fly=True,
     )
+    plot_demand_heatmap(grid, title="2. Delivery demand heatmap", show=True)
 
-    print(f"\n[A*] Waypoints: hub={hub}, pickup={pickup}, drop-off={dropoff}")
-    segments, err = plan_delivery_segments(grid, hub, pickup, dropoff)
-    if err:
-        print(f"[A*] FAILED: {err}")
-        plot_zone_layout(
-            grid,
-            title="2. Zone layout (routing failed)",
-            show=True,
-            mark_no_fly=True,
+    first_ok = next((a for a in assignments if a["status"] == "OK"), None)
+    if first_ok:
+        print(
+            f"[Route] {first_ok['job']} assigned to "
+            f"{first_ok['drone']} ({first_ok['type']}, "
+            f"range={LIGHT_RANGE_CELLS if first_ok['type'] == 'Light' else HEAVY_RANGE_CELLS} cells)"
         )
-        return grid
+        for name, res in first_ok["segments"]:
+            print(f"  {name}: cost={res.total_cost:.2f}  {_path_pretty(res.path or [])}")
+        plot_delivery_routes(
+            grid,
+            [(name, res.path or []) for name, res in first_ok["segments"]],
+            hub=first_ok["hub"],
+            pickup=first_ok["pickup"],
+            dropoff=first_ok["dropoff"],
+            title=f"3. A* delivery: {first_ok['job']} - hub -> pickup -> drop-off -> hub",
+            show=True,
+        )
 
-    for name, res in segments:
-        print(f"  {name}: cost={res.total_cost:.2f}  {_path_pretty(res.path or [])}")
+    run_disruption_demo(grid, assignments, drone_slots)
 
-    plot_delivery_routes(
-        grid,
-        [(name, res.path or []) for name, res in segments],
-        hub=hub,
-        pickup=pickup,
-        dropoff=dropoff,
-        title="2. A* delivery: hub -> pickup -> drop-off -> hub",
-        show=True,
-    )
     return grid
 
 
