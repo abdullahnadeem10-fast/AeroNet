@@ -181,6 +181,19 @@ The Streamlit dashboard is organized into 6 tabs:
 
 ---
 
+**Dashboard preview**
+
+- **Place image:** Save your screenshot to `report/figures/dashboard.png` in the repository.
+- **Markdown (simple):**
+
+  `![Dashboard screenshot](report/figures/dashboard.png)`
+
+- **HTML (sized):**
+
+  `<img src="report/figures/dashboard.png" width="800" alt="Dashboard screenshot" />`
+
+---
+
 ## Simulation Phases
 
 The 20-step orchestrated simulation (`delivery_simulator.py`) runs through the following lifecycle:

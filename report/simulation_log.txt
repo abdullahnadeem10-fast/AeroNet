@@ -1,0 +1,65 @@
+==============================================================
+ AERONET LITE -- 20-STEP DELIVERY SIMULATION
+==============================================================
+
+[Setup]
+Step 1: Layout validation FAILED (1 violation(s)). Repairing...
+Step 2: Layout repaired -- all CSP constraints satisfied.
+Step 3: Fleet selected: 0 light drone(s), 8 heavy drone(s). Total cost: $14400.
+
+[Delivery Assignment]
+Step 4: 6 delivery job(s) generated.
+Step 5: No-fly zones placed. Assigning drones with range constraints...
+  J1 -> D1 (Heavy): hub(0, 7) -> pickup(4, 3) -> drop-off(1, 2) [18 steps]
+  J2 -> D2 (Heavy): hub(0, 8) -> pickup(4, 9) -> drop-off(1, 6) [14 steps]
+  J3 -> D3 (Heavy): hub(0, 9) -> pickup(3, 7) -> drop-off(2, 6) [14 steps]
+  J4 UNASSIGNED -- no drone has sufficient range.
+  J5 UNASSIGNED -- no drone has sufficient range.
+  J6 -> D6 (Heavy): hub(1, 3) -> pickup(0, 2) -> drop-off(7, 0) [20 steps]
+Step 6: 4 drone(s) launched. 2 job(s) unassigned.
+
+[Movement Phase]
+Step 7: Drones advance (2 cells/step).  In-flight: 4  Completed: 0
+Step 8: Drones advance (2 cells/step).  In-flight: 4  Completed: 0
+Step 9: Drones advance (2 cells/step).  In-flight: 4  Completed: 0
+Step 10: Drones advance (2 cells/step).  In-flight: 4  Completed: 0
+
+[Disruption & Rerouting]
+Step 11: no-fly cell activated at (2, 3).
+  D1 (J1): route crosses (2, 3) - rerouting from (4, 3).
+  D1 rerouted using A*. 10 steps remaining.
+  D6 (J6): route crosses (2, 3) - rerouting from (6, 2).
+  D6 rerouted using A*. 12 steps remaining.
+Step 12: Movement.  In-flight: 4  Completed: 0
+Step 13: Movement.  In-flight: 4  Completed: 0
+Step 14: Movement.  In-flight: 2  Completed: 2
+  D2 (J2) completed delivery at step 14.
+  D3 (J3) completed delivery at step 14.
+
+[ML Demand Forecast]
+Step 15: Demand model trained.  MAE=7.49  RMSE=9.29
+Step 16: Grid demand updated from ML forecast (14:00, weekday, 28 C).
+Step 17: Movement.  In-flight: 2  Completed: 2
+
+[Anomaly Detection]
+Step 18: Anomaly classifier trained.  Accuracy=100.0%
+Step 18: Battery Anomaly detected for D1 at (0, 5).
+  D1 forced to return to hub (0, 7). Delivery marked as delayed.
+Step 19: Movement.  In-flight/returning: 1  Completed: 2
+  D1 (J1) returned to hub (delivery delayed) at step 19.
+
+[Final Summary]
+Step 20: Simulation complete.
+  Deliveries completed : 2
+  Deliveries delayed   : 2  (still in transit or forced return)
+  Deliveries failed    : 0  (no safe route)
+  Jobs unassigned      : 2  (range limit)
+  Total jobs generated : 6
+
+  Drone  Job   Status       Position   Progress  Anomaly
+  ----------------------------------------------------------
+  D1     J1    RETURNED     (0, 7)         100%  Battery Anomaly
+  D2     J2    COMPLETED    (0, 8)         100%  -
+  D3     J3    COMPLETED    (0, 9)         100%  -
+  D6     J6    IN_FLIGHT    (2, 2)          90%  -
+==============================================================
