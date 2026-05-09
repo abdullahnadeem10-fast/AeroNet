@@ -186,7 +186,7 @@ The Streamlit dashboard is organized into 6 tabs:
 - **Place image:** Save your screenshot to `report/figures/dashboard.png` in the repository.
 - **Markdown (simple):**
 
-  `[Dashboard screenshot](report/figures/dashboard.png)`
+  `![Dashboard screenshot](report/figures/dashboard.png)`
 
 - **HTML (sized):**
 
