@@ -31,6 +31,7 @@ from src.visualization import (
     plot_disruption_reroute,
 )
 from src.ml_pipeline import (
+    load_real_demand_dataset,
     generate_demand_dataset,
     train_demand_models,
     demand_forecast_for_grid,
@@ -41,6 +42,7 @@ from src.ml_pipeline import (
     ANOMALY_LABELS,
     DEMAND_FEATURES,
     FIGURES_DIR,
+    _BIKE_RAW_PATH,
 )
 from src.disruption_handler import make_active_delivery, activate_disruption
 
@@ -172,7 +174,10 @@ if "ready" not in st.session_state:
     assignments = _assign(grid, deliveries, slots)
 
     progress.progress(55, text="Training demand model...")
-    demand_df = generate_demand_dataset(n_samples=800, seed=seed)
+    try:
+        demand_df = load_real_demand_dataset(n_samples=800, seed=seed)
+    except Exception:
+        demand_df = generate_demand_dataset(n_samples=800, seed=seed)
     demand_results = train_demand_models(demand_df)
     demand_forecast_for_grid(grid, demand_results["Random Forest"]["model"])
     plot_demand_results(demand_results, show=False)
@@ -427,9 +432,10 @@ with tab_ml:
             st.image(str(img2), width="stretch")
 
         st.markdown("#### Dataset info")
+        source = "Bike Sharing Demand (UCI/Kaggle)" if _BIKE_RAW_PATH.exists() else "synthetic fallback"
         st.caption(
-            f"800 synthetic samples | features: {', '.join(DEMAND_FEATURES)} | "
-            "target: demand (0-100, integers)"
+            f"800 samples from {source} | features: {', '.join(DEMAND_FEATURES)} | "
+            "target: demand (0-100)"
         )
 
     with ml_anomaly:
@@ -449,10 +455,10 @@ with tab_ml:
             for (_, v), r in zip(
                 sorted(ANOMALY_LABELS.items()),
                 [
-                    "Gradual battery drop, low deviation",
-                    "battery_drop suddenly high (>8)",
-                    "route_deviation high (>4)",
-                    "altitude_change or speed_change spike (>5)",
+                    "Gradual battery drop (~3), low deviation — baseline",
+                    "battery_drop elevated (~6.5 mean, overlaps Normal tails)",
+                    "route_deviation elevated (~4.0 mean, overlaps Normal tails)",
+                    "altitude_change + speed_change spike (~4.5 mean, wide spread)",
                 ],
             )
         ]))
